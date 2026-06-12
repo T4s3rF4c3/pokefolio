@@ -1,0 +1,257 @@
+// Pokefolio — Prisma schema
+// SQLite by default; swap provider to "postgresql" if you ever want it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A TCG set (e.g. "Pokémon Card 151" → sv2a / mew)
+model CardSet {
+  id           String   @id // tcgdex set id, e.g. "sv2a"
+  name         String
+  code         String?  // short code printed on cards (e.g. "MEW")
+  series       String?
+  releaseDate  DateTime?
+  cardCount    Int?     // total printed cards in set
+  totalCount   Int?     // total including secret rares
+  logoUrl      String?
+  symbolUrl    String?
+
+  cards        Card[]
+  customCards  CustomCard[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// A card sourced from TCGdex
+model Card {
+  id            String   @id // tcgdex card id, e.g. "sv2a-150"
+  setId         String
+  set           CardSet  @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  // Numbering — local within the set (printed)
+  localId       String   // "150", "183", "TG01" …
+  name          String
+  rarity        String?
+  category      String?  // "Pokemon" | "Trainer" | "Energy"
+
+  // Display
+  imageUrl      String?  // high quality
+  imageUrlSmall String?
+
+  // Types / metadata
+  hp            Int?
+  types         String?  // comma-separated Pokémon types
+  illustrator   String?
+  lang          String   @default("en")
+
+  // Pricing cache (latest snapshot) — Cardmarket EUR via TCGdex
+  priceTrendEur     Float?
+  priceAvgEur       Float?
+  priceLowEur       Float?
+  priceTrendHoloEur Float?
+  priceAvgHoloEur   Float?
+  priceUpdatedAt    DateTime?
+
+  // TCGplayer USD via TCGdex. We pick the most relevant variant
+  // (holofoil > reverse-holofoil > normal) and store its band.
+  priceTcgpVariant     String?  // "holofoil" | "reverse-holofoil" | "normal"
+  priceTcgpLowUsd      Float?
+  priceTcgpMidUsd      Float?
+  priceTcgpHighUsd     Float?
+  priceTcgpMarketUsd   Float?
+  priceTcgpUpdatedAt   DateTime?
+
+  // Link to the Cardmarket bulk catalog. Once set, the price guide for that
+  // idProduct is the authoritative EUR source — TCGdex's Cardmarket cache
+  // remains as a fallback. The picker on the detail page sets this.
+  cardmarketIdProduct  Int?
+  @@index([cardmarketIdProduct])
+
+  collectionItems CollectionItem[]
+  binderSlots     BinderSlot[]
+  wishlistItems   WishlistItem[]
+  priceHistory    PriceHistory[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([setId, localId, lang])
+  @@index([name])
+}
+
+// A card NOT in TCGdex — fully user-entered.
+// Example: sv2a 183 "Mewtwo V2" promo.
+model CustomCard {
+  id             String   @id @default(cuid())
+  setId          String?  // links to CardSet if we know the set, else null + setCodeLabel below
+  set            CardSet? @relation(fields: [setId], references: [id], onDelete: SetNull)
+
+  setCodeLabel   String?  // free-text fallback if the set isn't synced (e.g. "sv2a", "PROMO")
+  setNameLabel   String?  // display label when set not linked
+  localId        String   // e.g. "183"
+  name           String
+  rarity         String?
+  category       String?
+  variantHint    String?  // suggested default variant (e.g. "Holo")
+
+  imageUrl       String?  // user-uploaded or remote
+  cardmarketUrl  String?  // direct Cardmarket Singles URL for reference / future scrape
+  notes          String?
+
+  // Manual price (fallback when no Cardmarket linkage is set).
+  manualPriceEur Float?
+  priceUpdatedAt DateTime?
+
+  // Link to Cardmarket bulk catalog. When set, daily Cardmarket prices for
+  // that idProduct become the auto-price for this custom card.
+  cardmarketIdProduct Int?
+  @@index([cardmarketIdProduct])
+
+  collectionItems CollectionItem[]
+  binderSlots     BinderSlot[]
+  wishlistItems   WishlistItem[]
+
+  createdAt      DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+}
+
+model CollectionItem {
+  id            String      @id @default(cuid())
+
+  cardId        String?
+  card          Card?       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  customCardId  String?
+  customCard    CustomCard? @relation(fields: [customCardId], references: [id], onDelete: Cascade)
+
+  quantity      Int      @default(1)
+  condition     String   @default("NM")    // Mint | NM | LP | MP | HP
+  variant       String   @default("Normal") // Normal | Holo | Reverse Holo | First Edition
+  language      String   @default("en")
+  purchasePrice Float?
+  notes         String?
+
+  acquiredAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([cardId])
+  @@index([customCardId])
+}
+
+model Binder {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  coverColor  String   @default("flame") // theme color slug
+  pageSize    Int      @default(9)       // 3x3 default
+
+  slots       BinderSlot[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model BinderSlot {
+  id           String      @id @default(cuid())
+  binderId     String
+  binder       Binder      @relation(fields: [binderId], references: [id], onDelete: Cascade)
+  position     Int         // 0-based slot index inside the binder
+
+  cardId       String?
+  card         Card?       @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  customCardId String?
+  customCard   CustomCard? @relation(fields: [customCardId], references: [id], onDelete: SetNull)
+
+  @@unique([binderId, position])
+}
+
+model WishlistItem {
+  id            String      @id @default(cuid())
+
+  cardId        String?
+  card          Card?       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  customCardId  String?
+  customCard    CustomCard? @relation(fields: [customCardId], references: [id], onDelete: Cascade)
+
+  maxPriceEur   Float?       // alert threshold
+  priority      Int          @default(0)
+  notes         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PriceHistory {
+  id         String   @id @default(cuid())
+  cardId     String
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  source     String   @default("tcgdex-cardmarket")
+  trendEur   Float?
+  avgEur     Float?
+  lowEur     Float?
+  capturedAt DateTime @default(now())
+
+  @@index([cardId, capturedAt])
+}
+
+// Cardmarket bulk catalog. Refreshed daily from
+// downloads.s3.cardmarket.com/productCatalog/productList/products_singles_6.json
+model CardmarketProduct {
+  idProduct   Int      @id
+  name        String
+  idExpansion Int
+  idMetacard  Int?
+  dateAdded   String?
+  searchKey   String   // lowercased name without brackets, for matching
+
+  price       CardmarketPrice?
+
+  @@index([idMetacard])
+  @@index([idExpansion])
+  @@index([searchKey])
+  @@index([name])
+}
+
+// Cardmarket daily price guide. Refreshed from
+// downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_6.json
+model CardmarketPrice {
+  idProduct  Int      @id
+  product    CardmarketProduct @relation(fields: [idProduct], references: [idProduct], onDelete: Cascade)
+  avg        Float?
+  low        Float?
+  trend      Float?
+  avg1       Float?
+  avg7       Float?
+  avg30      Float?
+  avgHolo    Float?
+  lowHolo    Float?
+  trendHolo  Float?
+  capturedAt DateTime @default(now())
+}
+
+model CardmarketSync {
+  id            Int       @id @default(1)
+  productsCount Int       @default(0)
+  pricesCount   Int       @default(0)
+  catalogAt     DateTime?
+  pricesAt      DateTime?
+  syncedAt      DateTime?
+}
+
+// One row table for app-wide preferences.
+model AppSetting {
+  id           Int      @id @default(1)
+  currency     String   @default("EUR")
+  primaryPrice String   @default("trend") // trend | avg | low
+  syncLanguage String   @default("de")
+  lastFullSync DateTime?
+  lastPriceSync DateTime?
+}

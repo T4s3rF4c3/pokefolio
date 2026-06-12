@@ -1,0 +1,321 @@
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
+from api.auth import get_current_user
+from database import get_db
+from services.card_values import effective_market_price, normalize_price_field
+from services.analytics import sort_top_movers
+from models import CollectionItem, Card, PriceHistory, PortfolioSnapshot, Set, ProductPurchase, User
+from typing import Optional
+import datetime
+
+router = APIRouter()
+
+def _get_item_price(item, price_field="price_trend"):
+    """Return the selected market price for a collection item, respecting holo variant."""
+    return effective_market_price(item.card, item.variant, price_field)
+
+
+@router.get("/duplicates")
+def get_duplicates(
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all cards owned more than once, sorted by total value."""
+    items = db.query(CollectionItem).options(
+        joinedload(CollectionItem.card).joinedload(Card.set_ref)
+    ).filter(
+        CollectionItem.user_id == current_user.id,
+        CollectionItem.quantity > 1,
+    ).all()
+
+    price_field = normalize_price_field(price_field)
+
+    result = []
+    for item in items:
+        if item.card:
+            price = _get_item_price(item, price_field)
+            result.append({
+                "id": item.id,
+                "card_id": item.card_id,
+                "name": item.card.name,
+                "set_name": item.card.set_ref.name if item.card.set_ref else None,
+                "images_small": item.card.images_small,
+                "quantity": item.quantity,
+                "price_market": round(price, 2),
+                "total_value": round(price * item.quantity, 2),
+                "rarity": item.card.rarity,
+            })
+
+    result.sort(key=lambda x: x["total_value"], reverse=True)
+    return result
+
+
+@router.get("/top-movers")
+def get_top_movers(
+    days: int = Query(7, ge=1, le=30),
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
+    sort_by: str = Query(
+        default="percentage",
+        pattern="^(percentage|absolute)$",
+        description="Sort top movers by percentage change or absolute value change",
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get cards with most price change in last N days."""
+    cutoff_date = datetime.date.today() - datetime.timedelta(days=days)
+    price_field = normalize_price_field(price_field)
+    history_field = price_field if price_field in {"price_market", "price_trend", "price_low"} else "price_market"
+
+    # Get collection card IDs
+    col_card_ids = [
+        item.card_id
+        for item in db.query(CollectionItem.card_id).filter(
+            CollectionItem.user_id == current_user.id
+        ).all()
+    ]
+    if not col_card_ids:
+        return []
+
+    results = []
+    for card_id in col_card_ids:
+        card = db.query(Card).filter(Card.id == card_id).first()
+        if not card:
+            continue
+
+        # Get oldest matching historical price in period. avg1/avg7/avg30 are not
+        # stored historically yet, so fall back to market history for those fields.
+        history_column = getattr(PriceHistory, history_field)
+        old_price_entry = db.query(PriceHistory).filter(
+            PriceHistory.card_id == card_id,
+            PriceHistory.date >= cutoff_date,
+            history_column.isnot(None),
+        ).order_by(PriceHistory.date.asc()).first()
+
+        if not old_price_entry:
+            continue
+
+        old_price = getattr(old_price_entry, history_field)
+        current_price = effective_market_price(card, price_field=history_field)
+
+        change_abs = current_price - old_price
+        change_pct = ((current_price - old_price) / old_price * 100) if old_price > 0 else 0
+
+        results.append({
+            "card_id": card_id,
+            "name": card.name,
+            "images_small": card.images_small,
+            "rarity": card.rarity,
+            "current_price": round(current_price, 2),
+            "old_price": round(old_price, 2),
+            "change_abs": round(change_abs, 2),
+            "change_pct": round(change_pct, 1),
+        })
+
+    return sort_top_movers(results, sort_by)[:20]
+
+
+@router.get("/rarity-stats")
+def get_rarity_stats(
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get rarity distribution of collection."""
+    items = db.query(CollectionItem).options(
+        joinedload(CollectionItem.card)
+    ).filter(
+        CollectionItem.user_id == current_user.id
+    ).all()
+
+    price_field = normalize_price_field(price_field)
+    rarity_counts = {}
+    rarity_values = {}
+
+    for item in items:
+        if item.card:
+            rarity = item.card.rarity or "Unknown"
+            rarity_counts[rarity] = rarity_counts.get(rarity, 0) + item.quantity
+            rarity_values[rarity] = rarity_values.get(rarity, 0) + (
+                _get_item_price(item, price_field) * item.quantity
+            )
+
+    total = sum(rarity_counts.values())
+    result = []
+    for rarity, count in rarity_counts.items():
+        result.append({
+            "rarity": rarity,
+            "count": count,
+            "percentage": round(count / total * 100, 1) if total > 0 else 0,
+            "total_value": round(rarity_values.get(rarity, 0), 2),
+        })
+
+    result.sort(key=lambda x: x["count"], reverse=True)
+    return result
+
+
+def _calc_products_cost(db: Session, user_id: int):
+    """Calculate cost of unsold products only (sold products no longer tied up)."""
+    all_products = db.query(ProductPurchase).filter(
+        ProductPurchase.user_id == user_id
+    ).all()
+    return sum(
+        p.purchase_price for p in all_products
+        if p.purchase_price is not None and p.sold_price is None
+    )
+
+
+def _take_portfolio_snapshot(db: Session, user_id: int, price_field: str = "price_trend"):
+    """Insert a new portfolio snapshot (called on every price sync)."""
+    now = datetime.datetime.utcnow()
+
+    collection_items = db.query(CollectionItem).join(Card).filter(
+        CollectionItem.user_id == user_id
+    ).all()
+    total_value = sum(
+        _get_item_price(item, price_field) * item.quantity
+        for item in collection_items
+        if item.card
+    )
+    total_cards = sum(item.quantity for item in collection_items)
+    # total_cost = card purchase prices + UNSOLD product purchases
+    cards_cost = sum(
+        (item.purchase_price or 0) * item.quantity
+        for item in collection_items
+    )
+    products_cost = _calc_products_cost(db, user_id)
+    total_cost = cards_cost + products_cost
+
+    snapshot = PortfolioSnapshot(
+        date=now,
+        user_id=user_id,
+        total_value=total_value,
+        total_cards=total_cards,
+        total_cost=total_cost,
+    )
+    db.add(snapshot)
+    db.commit()
+
+
+def _bucket_by_week(snapshots):
+    """Keep the last snapshot per ISO week."""
+    buckets = {}
+    for s in snapshots:
+        bucket = s.date.strftime('%Y-W%W')
+        buckets[bucket] = s
+    return list(buckets.values())
+
+
+def _downsample(snapshots, period: str):
+    """Downsample snapshot list based on period."""
+    if not snapshots:
+        return snapshots
+
+    if period == '1d':
+        # raw — every 30 min, ≤ 48 pts — no downsampling needed
+        return snapshots
+
+    if period == '1w':
+        # 2 per day — keep last value per 12-hour half-day bucket
+        buckets = {}
+        for s in snapshots:
+            half = 'am' if s.date.hour < 12 else 'pm'
+            bucket = s.date.strftime('%Y-%m-%d_') + half
+            buckets[bucket] = s
+        return list(buckets.values())
+
+    if period in ('1m', '3m'):
+        # 1 per day — daily last value
+        buckets = {}
+        for s in snapshots:
+            bucket = s.date.strftime('%Y-%m-%d')
+            buckets[bucket] = s
+        return list(buckets.values())
+
+    if period in ('6m', '1y'):
+        return _bucket_by_week(snapshots)
+
+    # max — 1 per week, or 1 per month if > 2 years of data
+    if snapshots[-1].date - snapshots[0].date > datetime.timedelta(days=730):
+        # 1 per month
+        buckets = {}
+        for s in snapshots:
+            bucket = s.date.strftime('%Y-%m')
+            buckets[bucket] = s
+        return list(buckets.values())
+    return _bucket_by_week(snapshots)
+
+
+@router.get("/investment-tracker")
+def get_investment_tracker(
+    period: str = Query('max'),
+    price_field: str = Query(default="price_trend", description="Price field to use for current value calculation"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get portfolio value over time with optional period filtering and downsampling."""
+    # Always insert a fresh snapshot so the current state is represented
+    price_field = normalize_price_field(price_field)
+    _take_portfolio_snapshot(db, current_user.id, price_field)
+
+    period = period.lower()
+
+    # Determine cutoff date based on period
+    now = datetime.datetime.utcnow()
+    cutoff = None
+    if period == '1d':
+        cutoff = now - datetime.timedelta(days=1)
+    elif period == '1w':
+        cutoff = now - datetime.timedelta(weeks=1)
+    elif period == '1m':
+        cutoff = now - datetime.timedelta(days=30)
+    elif period == '3m':
+        cutoff = now - datetime.timedelta(days=90)
+    elif period == '6m':
+        cutoff = now - datetime.timedelta(days=180)
+    elif period == '1y':
+        cutoff = now - datetime.timedelta(days=365)
+    # 'max' → no cutoff
+
+    query = db.query(PortfolioSnapshot).filter(
+        PortfolioSnapshot.user_id == current_user.id
+    ).order_by(PortfolioSnapshot.date.asc())
+    if cutoff:
+        query = query.filter(PortfolioSnapshot.date >= cutoff)
+    snapshots = query.all()
+
+    snapshots = _downsample(snapshots, period)
+
+    return [
+        {
+            "date": s.date.isoformat(),
+            "value": round(s.total_value, 2),
+            "cost": round(s.total_cost, 2),
+            "pnl": round(s.total_value - s.total_cost, 2),
+            "cards": s.total_cards,
+        }
+        for s in snapshots
+    ]
+
+
+@router.get("/new-sets")
+def get_new_sets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get newly detected sets."""
+    new_sets = db.query(Set).filter(Set.is_new == True).all()
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "series": s.series,
+            "release_date": s.release_date,
+            "total": s.total,
+            "images_symbol": s.images_symbol,
+            "images_logo": s.images_logo,
+        }
+        for s in new_sets
+    ]
