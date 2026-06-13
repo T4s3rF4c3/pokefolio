@@ -13,7 +13,7 @@
   <Category>HomeAutomation: MediaApp:Other</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/T4s3rF4c3/pokefolio/main/public/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/T4s3rF4c3/pokefolio/main/app/icon.svg</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>
