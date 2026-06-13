@@ -1,19 +1,19 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>pokefolio</Name>
-  <Repository>ghcr.io/YOUR_GH_USER/pokefolio:latest</Repository>
+  <Repository>ghcr.io/t4s3rf4c3/pokefolio:latest</Repository>
   <Registry>https://ghcr.io/</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/YOUR_GH_USER/pokefolio</Support>
-  <Project>https://github.com/YOUR_GH_USER/pokefolio</Project>
+  <Support>https://github.com/T4s3rF4c3/pokefolio</Support>
+  <Project>https://github.com/T4s3rF4c3/pokefolio</Project>
   <Overview>Pokéfolio is a self-hosted Pokémon TCG portfolio: collection, binders, wishlist, custom cards, price tracking via TCGdex and the Cardmarket bulk catalog. Runs as a single Next.js container backed by an embedded SQLite database — everything stays on your Unraid box.</Overview>
   <Category>HomeAutomation: MediaApp:Other</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/YOUR_GH_USER/pokefolio/main/pokefolio/public/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/T4s3rF4c3/pokefolio/main/public/icon.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>

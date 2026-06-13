@@ -101,9 +101,11 @@ also automatisch das Schema in `/app/data/pokefolio.db` an. Schema-Updates
 beim Container-Upgrade laufen genauso (idempotent, additiv — destruktive
 Änderungen werden bewusst verweigert).
 
-**Unraid:** das Template liegt in [`docker/pokefolio.xml`](./docker/pokefolio.xml).
-Vorher `YOUR_GH_USER` durch den eigenen GitHub-Account ersetzen und das
-Image nach `ghcr.io/<user>/pokefolio:latest` pushen. Standard-Volumes:
+**Unraid:** das Template liegt in [`docker/pokefolio.xml`](./docker/pokefolio.xml)
+und zeigt direkt auf `ghcr.io/t4s3rf4c3/pokefolio:latest`. Das Image wird
+durch den GitHub-Actions-Workflow ([.github/workflows/docker.yml](./.github/workflows/docker.yml))
+bei jedem Push auf `main` sowie bei `v*`-Tags multi-arch (amd64/arm64)
+gebaut und nach GHCR gepusht. Standard-Volumes:
 
 | Container Path        | Host Path (Default)                   | Zweck                  |
 |-----------------------|---------------------------------------|------------------------|
