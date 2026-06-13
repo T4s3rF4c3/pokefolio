@@ -12,6 +12,8 @@ const createSchema = z
   })
   .refine((v) => v.cardId || v.customCardId);
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const items = await prisma.wishlistItem.findMany({
     include: {

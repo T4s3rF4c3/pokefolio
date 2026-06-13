@@ -9,6 +9,8 @@ const createSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(20).default(9),
 });
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const binders = await prisma.binder.findMany({
     include: { _count: { select: { slots: true } } },
