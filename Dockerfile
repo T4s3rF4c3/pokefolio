@@ -31,6 +31,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssl ca-certificates tini gosu \
     && rm -rf /var/lib/apt/lists/* \
+    && (userdel -r node 2>/dev/null || true) \
+    && (groupdel node 2>/dev/null || true) \
     && groupadd -g 1000 nodeapp \
     && useradd -m -u 1000 -g 1000 -s /bin/bash nodeapp
 
