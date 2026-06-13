@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
 import { formatDate } from '@/lib/utils';
 import CardmarketSyncButton from './CardmarketSyncButton';
+import BackupCard from './BackupCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,8 @@ export default async function SettingsPage() {
           <Pair label="Wishlist" value={String(counts.wishlist)} />
         </div>
       </section>
+
+      <BackupCard />
 
       <section className="surface p-5 text-xs text-ink-300 leading-relaxed space-y-2">
         <h3 className="font-display text-sm font-semibold text-white">Hinweise</h3>

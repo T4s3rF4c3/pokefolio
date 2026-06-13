@@ -231,6 +231,11 @@ body {
   }
 }
 
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

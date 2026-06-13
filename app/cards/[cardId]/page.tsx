@@ -9,6 +9,7 @@ import { getCardAnyLang } from '@/lib/tcgdex';
 import { upsertTcgdexCard } from '@/lib/cards';
 import CardSparkline from '@/components/CardSparkline';
 import CardmarketLinker from '@/components/CardmarketLinker';
+import CardImageLangPicker from '@/components/CardImageLangPicker';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,21 +104,34 @@ export default async function CardPage({ params }: { params: { cardId: string } 
         Zurück
       </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[22rem,1fr] gap-8">
-        <div>
+      <div className="grid grid-cols-1 lg:grid-cols-[22rem,1fr] gap-6 lg:gap-8">
+        <div className="max-w-[20rem] mx-auto lg:max-w-none lg:mx-0 w-full">
           <div className="holo-frame">
             <div className="aspect-[63/88] relative overflow-hidden rounded-[0.75rem] bg-ink-800">
-              {card.imageUrl && (
+              {card.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={card.imageUrl}
                   alt={card.name}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 text-ink-300 text-xs">
+                  Kein Bild vorhanden. Wähle unten eine andere Sprache als
+                  Fallback.
+                </div>
               )}
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-300">
+          <div className="mt-3">
+            <CardImageLangPicker
+              cardId={card.id}
+              cardLang={card.lang}
+              imageLang={card.imageLang}
+              hasImage={Boolean(card.imageUrl)}
+            />
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-300">
             <a
               href={
                 card.cardmarketIdProduct
@@ -157,7 +171,7 @@ export default async function CardPage({ params }: { params: { cardId: string } 
             <div className="text-[10px] uppercase tracking-[0.25em] text-flame-400 font-semibold">
               {card.set?.series ?? 'Karte'}
             </div>
-            <h2 className="font-display text-3xl font-bold mt-1">{card.name}</h2>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold mt-1 break-words">{card.name}</h2>
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <CardCodeBadge
                 code={card.set?.code ?? card.set?.id ?? card.id.split('-')[0]}

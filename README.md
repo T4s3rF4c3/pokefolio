@@ -5,8 +5,8 @@ Wishlist und Cardmarket-Preise — gestützt auf [TCGdex](https://tcgdex.dev/),
 mit voller Unterstützung für **Custom Cards**, die TCGdex nicht kennt (z.B.
 Promos wie `sv2a 183` Mewtwo V2).
 
-Komplette Neufassung des Projekts unter [`old/`](./old). Dieser Branch löst
-sich von Python/FastAPI/PostgreSQL und nutzt stattdessen:
+Komplette Neufassung. Statt der früheren Python/FastAPI/PostgreSQL-Basis
+nutzt diese Version:
 
 - **Next.js 14 (App Router) + TypeScript**
 - **Prisma + SQLite** (Datei-DB, kein Docker nötig)
@@ -85,6 +85,34 @@ DEFAULT_CURRENCY="EUR"
 Auf Postgres umsteigen? In `prisma/schema.prisma` `provider` auf `postgresql`
 ändern, `DATABASE_URL` setzen, `npm run db:push`.
 
+## Docker / Unraid
+
+Die App läuft als einzelner Container mit zwei persistenten Volumes
+(`/app/data` für die SQLite-DB, `/app/public/uploads` für eigene Bilder).
+
+```bash
+# lokales Build + Start
+docker compose up -d --build
+# erreichbar auf http://localhost:3000
+```
+
+Beim ersten Start wendet das Entrypoint-Script `prisma db push` an, legt
+also automatisch das Schema in `/app/data/pokefolio.db` an. Schema-Updates
+beim Container-Upgrade laufen genauso (idempotent, additiv — destruktive
+Änderungen werden bewusst verweigert).
+
+**Unraid:** das Template liegt in [`docker/pokefolio.xml`](./docker/pokefolio.xml).
+Vorher `YOUR_GH_USER` durch den eigenen GitHub-Account ersetzen und das
+Image nach `ghcr.io/<user>/pokefolio:latest` pushen. Standard-Volumes:
+
+| Container Path        | Host Path (Default)                   | Zweck                  |
+|-----------------------|---------------------------------------|------------------------|
+| `/app/data`           | `/mnt/user/appdata/pokefolio/data`    | SQLite-DB              |
+| `/app/public/uploads` | `/mnt/user/appdata/pokefolio/uploads` | Custom-Card-Bilder     |
+
+Backups laufen über die UI (Einstellungen → „Backup herunterladen") oder
+durch direktes Sichern von `/mnt/user/appdata/pokefolio/data/pokefolio.db`.
+
 ## Was bewusst draußen ist
 
 Aus dem alten Projekt verzichten wir hier auf Multi-User, Gemini-Scanner,
@@ -93,4 +121,4 @@ zurück soll, ist das Schema flexibel genug — einfach Bescheid sagen.
 
 ## Lizenz
 
-GNU AGPLv3 — wie das alte Projekt unter `old/`.
+GNU AGPLv3.

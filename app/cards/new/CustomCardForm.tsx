@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Sparkles, Link2, ImageIcon, Upload, X, Download } from 'lucide-react';
 import { VARIANTS } from '@/lib/utils';
+import TcgdexImageFinder from '@/components/TcgdexImageFinder';
 
 type FormState = {
   name: string;
@@ -462,6 +463,15 @@ export default function CustomCardForm({ initialName, editId, initial }: CustomC
               onChange={(e) => update('imageUrl', e.target.value)}
               placeholder="… oder Bild-URL einfügen (https://…)"
             />
+            <div className="mt-3">
+              <TcgdexImageFinder
+                setCode={form.setCodeLabel}
+                localId={form.localId}
+                defaultName={form.name}
+                currentImageUrl={form.imageUrl}
+                onPick={(url) => update('imageUrl', url)}
+              />
+            </div>
           </Field>
           <Field label="Notizen">
             <textarea

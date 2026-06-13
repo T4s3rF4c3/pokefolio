@@ -44,6 +44,10 @@ model Card {
   // Display
   imageUrl      String?  // high quality
   imageUrlSmall String?
+  // Language used for the currently-stored imageUrl. NULL = same as `lang`.
+  // The detail page lets the user pick a fallback (e.g. EN image for a DE card
+  // that TCGdex doesn't have a localized asset for).
+  imageLang     String?
 
   // Types / metadata
   hp            Int?

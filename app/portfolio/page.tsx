@@ -111,14 +111,14 @@ export default async function PortfolioPage({
         <h3 className="font-display text-sm font-semibold mb-4">
           Positionen ({positions.length})
         </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm tabular-nums">
+        <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+          <table className="w-full text-sm tabular-nums min-w-[460px]">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-[0.2em] text-ink-300">
                 <th className="pb-2">Karte</th>
                 <th className="pb-2 text-right">Menge</th>
-                <th className="pb-2 text-right">Kurs</th>
-                <th className="pb-2 text-right">Vor {days}T</th>
+                <th className="pb-2 text-right hidden xs:table-cell">Kurs</th>
+                <th className="pb-2 text-right hidden md:table-cell">Vor {days}T</th>
                 <th className="pb-2 text-right">Δ %</th>
                 <th className="pb-2 text-right">Wert</th>
               </tr>
@@ -134,7 +134,7 @@ export default async function PortfolioPage({
                     key={p.cardId}
                     className="border-t border-white/5 hover:bg-white/[0.02] transition"
                   >
-                    <td className="py-2.5">
+                    <td className="py-2.5 pr-2">
                       <Link
                         href={p.href}
                         className="flex items-center gap-2 hover:text-white"
@@ -144,13 +144,13 @@ export default async function PortfolioPage({
                           <img
                             src={p.imageUrl}
                             alt={p.name}
-                            className="h-9 w-6 rounded object-cover bg-ink-800"
+                            className="h-9 w-6 rounded object-cover bg-ink-800 shrink-0"
                             loading="lazy"
                           />
                         )}
-                        <div>
-                          <div className="text-white font-medium flex items-center gap-1.5">
-                            {p.name}
+                        <div className="min-w-0">
+                          <div className="text-white font-medium flex items-center gap-1.5 truncate">
+                            <span className="truncate">{p.name}</span>
                             {p.isCustom && (
                               <span className="pill !text-[9px] !text-psychic-400 !border-psychic-500/30">
                                 custom
@@ -159,13 +159,14 @@ export default async function PortfolioPage({
                           </div>
                           <div className="text-[11px] text-ink-300 font-mono">
                             {p.setCode ?? '—'} {p.localId}
+                            <span className="xs:hidden"> · {formatEur(p.currentEur)}</span>
                           </div>
                         </div>
                       </Link>
                     </td>
                     <td className="text-right text-ink-200">×{p.quantity}</td>
-                    <td className="text-right">{formatEur(p.currentEur)}</td>
-                    <td className="text-right text-ink-300">
+                    <td className="text-right hidden xs:table-cell">{formatEur(p.currentEur)}</td>
+                    <td className="text-right text-ink-300 hidden md:table-cell">
                       {p.previousEur > 0 ? formatEur(p.previousEur) : '—'}
                     </td>
                     <td

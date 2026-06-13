@@ -67,7 +67,7 @@ export default function AddToCollectionForm({ cardId, customCardId }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-3">
       <div>
         <label className="label">Anzahl</label>
         <input
@@ -128,16 +128,17 @@ export default function AddToCollectionForm({ cardId, customCardId }: Props) {
         />
       </div>
 
-      <div className="sm:col-span-5 flex gap-2 pt-1">
-        <button onClick={add} disabled={busy} className="btn btn-primary text-sm flex-1">
+      <div className="col-span-2 xs:col-span-3 sm:col-span-5 flex flex-wrap gap-2 pt-1">
+        <button onClick={add} disabled={busy} className="btn btn-primary text-sm flex-1 min-w-[160px]">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           Hinzufügen
         </button>
         <button onClick={wish} disabled={busy} className="btn btn-ghost text-sm">
           <Heart className="h-4 w-4" />
-          Auf Wishlist
+          <span className="hidden xs:inline">Auf Wishlist</span>
+          <span className="xs:hidden">Wishlist</span>
         </button>
-        {toast && <span className="text-xs text-ink-200 self-center ml-2">{toast}</span>}
+        {toast && <span className="text-xs text-ink-200 self-center ml-2 w-full xs:w-auto">{toast}</span>}
       </div>
     </div>
   );

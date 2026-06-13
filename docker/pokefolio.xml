@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>pokefolio</Name>
+  <Repository>ghcr.io/YOUR_GH_USER/pokefolio:latest</Repository>
+  <Registry>https://ghcr.io/</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/YOUR_GH_USER/pokefolio</Support>
+  <Project>https://github.com/YOUR_GH_USER/pokefolio</Project>
+  <Overview>Pokéfolio is a self-hosted Pokémon TCG portfolio: collection, binders, wishlist, custom cards, price tracking via TCGdex and the Cardmarket bulk catalog. Runs as a single Next.js container backed by an embedded SQLite database — everything stays on your Unraid box.</Overview>
+  <Category>HomeAutomation: MediaApp:Other</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/YOUR_GH_USER/pokefolio/main/pokefolio/public/icon.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1733000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Description>Pokéfolio is a self-hosted Pokémon TCG portfolio app.[br][br]
+  [b]Features:[/b][br]
+  • Collection, binders, wishlist mit Mengen, Zustand, Variante, Sprache[br]
+  • TCGdex-Integration für Karten-Metadaten und Bilder (DE/EN/FR/ES/IT/PT/JA Fallback)[br]
+  • Cardmarket-Bulk-Katalog mit täglichem Preis-Guide — keine Scraping-API nötig[br]
+  • Custom Cards für Promo / Inserts mit eigenem Bild-Upload[br]
+  • TCGdex-Bildsuche per Set+Nr. oder per Name in allen Sprachen[br]
+  • Portfolio-Kursverlauf mit historischen Snapshots[br]
+  • Mobile-/iPhone-Webclip-tauglich, dunkles UI[br]
+  • Backup + Restore der gesamten Datenbank aus den Einstellungen heraus[br][br]
+  [b]Default Port:[/b] 3000[br]
+  [b]Default User/Group:[/b] 99:100 (nobody:users)[br]
+  [b]Storage:[/b][br]
+  • /app/data        — SQLite-Datenbank (pokefolio.db)[br]
+  • /app/public/uploads — eigene Karten-Bilder
+  </Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>3000</HostPort>
+        <ContainerPort>3000</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/pokefolio/data</HostDir>
+      <ContainerDir>/app/data</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/appdata/pokefolio/uploads</HostDir>
+      <ContainerDir>/app/public/uploads</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Value>99</Value>
+      <Name>PUID</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>100</Value>
+      <Name>PGID</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>Europe/Berlin</Value>
+      <Name>TZ</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>file:/app/data/pokefolio.db</Value>
+      <Name>DATABASE_URL</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>de</Value>
+      <Name>TCGDEX_LANG</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp" Description="HTTP port of the Next.js server" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Database Directory" Target="/app/data" Default="/mnt/user/appdata/pokefolio/data" Mode="rw" Description="Holds pokefolio.db (SQLite). Back up regularly." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/pokefolio/data</Config>
+  <Config Name="Uploads Directory" Target="/app/public/uploads" Default="/mnt/user/appdata/pokefolio/uploads" Mode="rw" Description="User-uploaded custom card images, served at /uploads/*" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/pokefolio/uploads</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID inside the container (99 = nobody)" Type="Variable" Display="always" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID inside the container (100 = users)" Type="Variable" Display="always" Required="true" Mask="false">100</Config>
+  <Config Name="Timezone" Target="TZ" Default="Europe/Berlin" Mode="" Description="System timezone" Type="Variable" Display="always" Required="true" Mask="false">Europe/Berlin</Config>
+  <Config Name="Database URL" Target="DATABASE_URL" Default="file:/app/data/pokefolio.db" Mode="" Description="Prisma connection string. Must point at a writable path inside the Database volume." Type="Variable" Display="advanced" Required="true" Mask="false">file:/app/data/pokefolio.db</Config>
+  <Config Name="Primary TCGdex Language" Target="TCGDEX_LANG" Default="de" Mode="" Description="Two-letter language code for the primary TCGdex sync (de/en/fr/es/it/pt/ja)." Type="Variable" Display="advanced" Required="false" Mask="false">de</Config>
+</Container>
