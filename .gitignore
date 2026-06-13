@@ -16,8 +16,10 @@ prisma/*.db-shm
 prisma/dev.db.bak-*
 prisma/migrations/dev.db
 
-# Uploads
-public/uploads
+# Uploads (keep the directory so the Docker build's COPY public ./public
+# has something to copy; ignore everything inside it).
+public/uploads/*
+!public/uploads/.gitkeep
 
 # Docker local-dev volumes
 .data/
