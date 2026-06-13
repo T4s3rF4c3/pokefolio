@@ -1,0 +1,46 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model CollectionEntry {
+  id        String   @id // "{cardId}:{variant}" – eine Karte kann in mehreren Varianten vorliegen
+  cardId    String
+  variant   String   @default("normal")
+  data      String
+  updatedAt DateTime @updatedAt
+
+  @@index([cardId])
+}
+
+model ManualCard {
+  id        String   @id
+  data      String
+  updatedAt DateTime @updatedAt
+}
+
+model CardSnapshot {
+  id     Int    @id @default(autoincrement())
+  cardId String
+  date   String
+  trend  Float?
+  avg7   Float?
+  avg30  Float?
+
+  @@unique([cardId, date])
+  @@index([cardId])
+}
+
+model PortfolioSnapshot {
+  date  String @id
+  value Float
+}
+
+model Setting {
+  key   String @id
+  value String
+}

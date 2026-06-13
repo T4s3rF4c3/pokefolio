@@ -67,28 +67,18 @@ export default function CardTile({
           </div>
         )}
 
-        {rarity && (
-          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-            <span className="pill !bg-ink-950/70 !backdrop-blur">{rarity}</span>
-            {trendEur != null && (
-              <span className="pill !bg-ink-950/70 !backdrop-blur !text-white">
-                {formatEur(trendEur)}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="px-3 pt-2.5 pb-3">
         <div className="text-sm font-semibold truncate text-white" title={name}>
           {name}
         </div>
-        <div className="mt-0.5 flex items-center justify-between text-[11px] text-ink-300">
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-ink-300">
           <span className="truncate">
             {setLabel ?? '—'} · {localId ?? '—'}
           </span>
-          {trendEur != null && !rarity && (
-            <span className="text-white font-semibold">{formatEur(trendEur)}</span>
+          {trendEur != null && (
+            <span className="text-white font-semibold shrink-0">{formatEur(trendEur)}</span>
           )}
         </div>
       </div>

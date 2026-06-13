@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { prisma } from '@/lib/prisma';
 import { computeMovers, computePortfolioCurve } from '@/lib/portfolio';
 import PageHeader from '@/components/PageHeader';
 import PortfolioChart from '@/components/PortfolioChart';
@@ -22,51 +21,13 @@ export default async function PortfolioPage({
   searchParams: { r?: string };
 }) {
   const days = Number(searchParams.r ?? 30);
-  const [movers, curve, items] = await Promise.all([
+  const [movers, curve] = await Promise.all([
     computeMovers(days),
     computePortfolioCurve(days),
-    prisma.collectionItem.findMany({
-      where: { cardId: { not: null } },
-      include: {
-        card: { include: { set: { select: { name: true, code: true } } } },
-      },
-    }),
   ]);
 
-  // Per-card position rows.
-  const positionByCard = new Map<
-    string,
-    {
-      quantity: number;
-      currentEur: number;
-      previousEur: number;
-      card: NonNullable<(typeof items)[number]['card']>;
-    }
-  >();
-  for (const it of items) {
-    if (!it.card) continue;
-    const cur = positionByCard.get(it.card.id);
-    if (cur) {
-      cur.quantity += it.quantity;
-    } else {
-      positionByCard.set(it.card.id, {
-        quantity: it.quantity,
-        currentEur: it.card.priceTrendEur ?? it.card.priceAvgEur ?? 0,
-        previousEur: 0,
-        card: it.card,
-      });
-    }
-  }
-  // Match with movers' previousEur where available.
-  for (const m of [...movers.gainers, ...movers.losers]) {
-    const p = positionByCard.get(m.cardId);
-    if (p) p.previousEur = m.previousEur;
-  }
-
-  const positions = Array.from(positionByCard.values()).sort(
-    (a, b) => b.currentEur * b.quantity - a.currentEur * a.quantity,
-  );
-
+  // Every holding (Cards + CustomCards) with effective prices, value-sorted.
+  const positions = movers.all;
   const trendDown = movers.totalChangeEur < 0;
 
   return (
@@ -170,27 +131,34 @@ export default async function PortfolioPage({
                 const up = pct >= 0;
                 return (
                   <tr
-                    key={p.card.id}
+                    key={p.cardId}
                     className="border-t border-white/5 hover:bg-white/[0.02] transition"
                   >
                     <td className="py-2.5">
                       <Link
-                        href={`/cards/${p.card.id}`}
+                        href={p.href}
                         className="flex items-center gap-2 hover:text-white"
                       >
-                        {p.card.imageUrl && (
+                        {p.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={p.card.imageUrl}
-                            alt={p.card.name}
+                            src={p.imageUrl}
+                            alt={p.name}
                             className="h-9 w-6 rounded object-cover bg-ink-800"
                             loading="lazy"
                           />
                         )}
                         <div>
-                          <div className="text-white font-medium">{p.card.name}</div>
+                          <div className="text-white font-medium flex items-center gap-1.5">
+                            {p.name}
+                            {p.isCustom && (
+                              <span className="pill !text-[9px] !text-psychic-400 !border-psychic-500/30">
+                                custom
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-ink-300 font-mono">
-                            {p.card.set?.code ?? '—'} {p.card.localId}
+                            {p.setCode ?? '—'} {p.localId}
                           </div>
                         </div>
                       </Link>

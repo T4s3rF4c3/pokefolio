@@ -49,6 +49,11 @@ export default function CardmarketLinker({
   const [results, setResults] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [linking, setLinking] = useState(false);
+  // Direct link via a pasted Cardmarket reference (image URL / idProduct /
+  // page URL) — covers cards the name search can't find, e.g. Japanese cards.
+  const [paste, setPaste] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const [resolveMsg, setResolveMsg] = useState<{ tone: 'err' | 'info'; msg: string } | null>(null);
   const debounce = useRef<number | null>(null);
 
   useEffect(() => {
@@ -72,6 +77,30 @@ export default function CardmarketLinker({
       if (debounce.current) window.clearTimeout(debounce.current);
     };
   }, [q, open]);
+
+  async function resolveAndLink() {
+    const input = paste.trim();
+    if (!input) return;
+    setResolving(true);
+    setResolveMsg(null);
+    try {
+      const res = await fetch('/api/cardmarket/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input }),
+      });
+      const data = await res.json();
+      if (data.found) {
+        await link(data.idProduct); // links, refreshes, closes the modal
+      } else {
+        setResolveMsg({ tone: 'info', msg: data.reason ?? 'Kein Produkt gefunden.' });
+      }
+    } catch (err) {
+      setResolveMsg({ tone: 'err', msg: String(err) });
+    } finally {
+      setResolving(false);
+    }
+  }
 
   async function link(idProduct: number | null) {
     setLinking(true);
@@ -139,6 +168,48 @@ export default function CardmarketLinker({
                 Aus dem täglich gesicherten Bulk-Katalog (gefiltert auf Pokémon
                 Singles). Wenn du nichts findest, in den Einstellungen den
                 Cardmarket-Sync auslösen.
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="text-[11px] text-ink-300 mb-1.5">
+                  Oder direkt per Cardmarket-<strong className="text-ink-200">Bild-URL</strong> /
+                  idProduct verknüpfen — ideal für Karten, die die Namenssuche nicht findet
+                  (z.B. japanische). Auf Cardmarket Rechtsklick aufs Kartenbild → Bildadresse
+                  kopieren.
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={paste}
+                    onChange={(e) => {
+                      setPaste(e.target.value);
+                      setResolveMsg(null);
+                    }}
+                    placeholder="…s3.cardmarket.com/51/sv3/724969/… oder 724969"
+                    className="input w-full flex-1 text-xs"
+                  />
+                  <button
+                    onClick={resolveAndLink}
+                    disabled={resolving || !paste.trim()}
+                    className="btn btn-primary text-xs whitespace-nowrap"
+                  >
+                    {resolving ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Link2 className="h-3.5 w-3.5" />
+                    )}
+                    Verknüpfen
+                  </button>
+                </div>
+                {resolveMsg && (
+                  <div
+                    className={cn(
+                      'text-[11px] mt-1.5',
+                      resolveMsg.tone === 'err' ? 'text-flame-400' : 'text-ink-300',
+                    )}
+                  >
+                    {resolveMsg.msg}
+                  </div>
+                )}
               </div>
             </div>
 

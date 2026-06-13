@@ -23,6 +23,7 @@ const updateSchema = z.object({
   cardmarketUrl: z.string().url().optional().nullable().or(z.literal('')),
   notes: z.string().max(800).optional().nullable(),
   manualPriceEur: z.coerce.number().nonnegative().optional().nullable(),
+  cardmarketIdProduct: z.coerce.number().int().positive().optional().nullable(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

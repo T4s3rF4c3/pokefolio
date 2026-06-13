@@ -26,6 +26,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  await prisma.collectionItem.delete({ where: { id: params.id } });
-  return NextResponse.json({ ok: true });
+  // deleteMany is idempotent: a no-op (count 0) if the row is already gone,
+  // so a double-click never surfaces a 500 (P2025).
+  const { count } = await prisma.collectionItem.deleteMany({ where: { id: params.id } });
+  return NextResponse.json({ ok: true, deleted: count });
 }

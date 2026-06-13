@@ -33,8 +33,19 @@ const empty: FormState = {
   notes: '',
 };
 
-export default function CustomCardForm({ initialName }: { initialName?: string }) {
-  const [form, setForm] = useState<FormState>({ ...empty, name: initialName ?? '' });
+type CustomCardFormProps = {
+  initialName?: string;
+  /** When set, the form edits this card via PATCH instead of creating one. */
+  editId?: string;
+  /** Prefill values for edit mode. */
+  initial?: Partial<FormState> & { cardmarketIdProduct?: number | null };
+};
+
+export default function CustomCardForm({ initialName, editId, initial }: CustomCardFormProps) {
+  const [form, setForm] = useState<FormState>(() => {
+    const { cardmarketIdProduct: _omit, ...rest } = initial ?? {};
+    return { ...empty, ...rest, name: rest.name ?? initialName ?? '' };
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -43,6 +54,9 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
     null,
   );
   const [cmBusy, setCmBusy] = useState(false);
+  // idProduct resolved from a pasted Cardmarket reference — links the custom
+  // card to the bulk catalog so it gets daily price updates automatically.
+  const [cmIdProduct, setCmIdProduct] = useState<number | null>(initial?.cardmarketIdProduct ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -104,32 +118,73 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
 
   async function fetchCardmarketPrice() {
     setCmStatus(null);
-    if (!form.cardmarketUrl.trim()) {
-      setCmStatus({ tone: 'err', msg: 'Bitte erst eine Cardmarket-URL eingeben.' });
+    const input = form.cardmarketUrl.trim();
+    if (!input) {
+      setCmStatus({ tone: 'err', msg: 'Bitte erst eine Cardmarket-URL, Bild-URL oder idProduct eingeben.' });
       return;
     }
     setCmBusy(true);
     try {
-      const res = await fetch('/api/cardmarket/lookup', {
+      // 1. Primary path: extract idProduct (image URL / number / ?idProduct=)
+      //    and read the price from the synced bulk catalog. No scraping.
+      const res = await fetch('/api/cardmarket/resolve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: form.cardmarketUrl.trim() }),
+        body: JSON.stringify({ input }),
       });
       const data = await res.json();
-      if (data.priceEur != null) {
-        update('manualPriceEur', String(data.priceEur));
+
+      if (data.found) {
+        setCmIdProduct(data.idProduct);
+        if (data.priceEur != null) update('manualPriceEur', String(data.priceEur));
+        // If the user pasted the S3 image URL, use it directly as the card
+        // image (most reliable). Otherwise fall back to the reconstructed one.
+        const pastedIsImage = /product-images\.s3\.cardmarket\.com/i.test(input);
+        setForm((f) => ({
+          ...f,
+          imageUrl: f.imageUrl || (pastedIsImage ? input : '') || data.imageUrl || '',
+          setCodeLabel: f.setCodeLabel || data.setCode || '',
+          // Store a clean product-page link (not the pasted image URL) so the
+          // "Cardmarket öffnen" link on the detail page works.
+          cardmarketUrl: data.productUrl,
+        }));
         setCmStatus({
           tone: 'ok',
-          msg: `Übernommen: ${data.priceEur.toFixed(2)} € (${data.source})`,
-        });
-      } else {
-        setCmStatus({
-          tone: 'info',
           msg:
-            data.reason ??
-            'Cardmarket blockt automatische Abfragen (Cloudflare). Bitte Preis manuell eintragen.',
+            data.priceEur != null
+              ? `Übernommen: ${Number(data.priceEur).toFixed(2)} € · ${data.name} (idProduct ${data.idProduct}, verknüpft)`
+              : `Verknüpft: ${data.name} (idProduct ${data.idProduct}) — für diese Karte liegt aktuell kein Bulk-Preis vor.`,
         });
+        return;
       }
+
+      // Resolve could not find a product. Prefill anything it parsed from a
+      // page URL so the form is at least filled in.
+      if (data.setCode || data.cardName || data.cardNumber) {
+        setForm((f) => ({
+          ...f,
+          setCodeLabel: f.setCodeLabel || data.setCode || '',
+          localId: f.localId || data.cardNumber || '',
+          name: f.name || data.cardName || '',
+        }));
+      }
+
+      // 2. Fallback: legacy TCGdex/scrape lookup (only meaningful for a URL).
+      if (/^https?:\/\//i.test(input)) {
+        const res2 = await fetch('/api/cardmarket/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: input }),
+        });
+        const d2 = await res2.json();
+        if (d2.priceEur != null) {
+          update('manualPriceEur', String(d2.priceEur));
+          setCmStatus({ tone: 'ok', msg: `Übernommen: ${Number(d2.priceEur).toFixed(2)} € (${d2.source})` });
+          return;
+        }
+      }
+
+      setCmStatus({ tone: 'info', msg: data.reason ?? 'Kein Preis gefunden. Bitte manuell eintragen.' });
     } catch (err) {
       setCmStatus({ tone: 'err', msg: String(err) });
     } finally {
@@ -162,9 +217,10 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
         cardmarketUrl: form.cardmarketUrl.trim() || null,
         notes: form.notes.trim() || null,
         manualPriceEur: form.manualPriceEur ? Number(form.manualPriceEur) : null,
+        cardmarketIdProduct: cmIdProduct,
       };
-      const res = await fetch('/api/custom-cards', {
-        method: 'POST',
+      const res = await fetch(editId ? `/api/custom-cards/${editId}` : '/api/custom-cards', {
+        method: editId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -174,7 +230,7 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
         const firstIssue = issues ? Object.values(issues).flat()[0] : (data?.error ?? 'Fehler');
         throw new Error(String(firstIssue));
       }
-      router.push(`/cards/custom/${data.id}`);
+      router.push(`/cards/custom/${editId ?? data.id}`);
       router.refresh();
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err));
@@ -276,7 +332,7 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
                 className="input w-full flex-1"
                 value={form.cardmarketUrl}
                 onChange={(e) => update('cardmarketUrl', e.target.value)}
-                placeholder="https://www.cardmarket.com/de/Pokemon/Products/Singles/…"
+                placeholder="Produktseiten-URL, Bild-URL (…s3.cardmarket.com/51/…) oder idProduct"
               />
               <button
                 type="button"
@@ -307,7 +363,11 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
               </div>
             )}
             <div className="text-[11px] text-ink-300 mt-1">
-              Set-Code &amp; Nummer werden aus der URL erkannt, sobald du sie einfügst.
+              Set-Code &amp; Nummer werden aus der URL erkannt. Für den{' '}
+              <strong className="text-ink-200">automatischen Preis</strong> auf Cardmarket
+              rechtsklick aufs Kartenbild → „Bildadresse kopieren" und hier einfügen — der
+              Bulk-Preis wird übernommen und die Karte dauerhaft verknüpft. (Bulk-Daten vorher
+              unter Einstellungen synchronisieren.)
             </div>
           </Field>
           <Field label="Marktpreis in EUR (manuell oder aus Cardmarket)">
@@ -422,7 +482,7 @@ export default function CustomCardForm({ initialName }: { initialName?: string }
         <div className="flex gap-3 pt-2">
           <button onClick={submit} disabled={!canSubmit} className="btn btn-primary">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Custom Card speichern
+            {editId ? 'Änderungen speichern' : 'Custom Card speichern'}
           </button>
           <button onClick={() => router.back()} className="btn btn-ghost" disabled={busy}>
             Abbrechen

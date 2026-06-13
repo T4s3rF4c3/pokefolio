@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@theme {
+  --color-poke-red: #cc0000;
+  --color-poke-red-dark: #990000;
+  --color-poke-yellow: #ffcb05;
+  --color-poke-blue: #3b4cca;
+  --color-surface:   #0f1729;
+  --color-surface-2: #131f35;
+  --color-surface-3: #1a2d4a;
+  --color-border:    #1e2f4e;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: #0d0d1a;
+  background-image: radial-gradient(ellipse 120% 55% at 50% -5%, rgba(19,31,53,0.55) 0%, transparent 55%);
+  background-attachment: fixed;
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS safe-area utilities */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Scrollbar */
+::-webkit-scrollbar       { width: 5px; }
+::-webkit-scrollbar-track { background: #0d0d1a; }
+::-webkit-scrollbar-thumb { background: #1e2f4e; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #253756; }
+
+/* Gradient text — yellow/gold for hero titles */
+.gradient-text {
+  background: linear-gradient(135deg, #ffcb05 20%, #f0a500 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass utility for overlays */
+.glass {
+  background: rgba(13, 13, 26, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* Card shine — subtle shimmer on hover */
+.card-shine {
+  position: relative;
+  overflow: hidden;
+}
+.card-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 30%,
+    rgba(255, 203, 5, 0.025) 45%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 203, 5, 0.025) 55%,
+    transparent 70%
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.card-shine:hover::after { opacity: 1; }
+
+/* Rarity-based hover glows */
+.glow-uncommon:hover { box-shadow: 0 4px 24px rgba(34, 197,  94, 0.18), 0 0 48px rgba(34, 197,  94, 0.07); }
+.glow-rare:hover     { box-shadow: 0 4px 24px rgba(59, 130, 246, 0.22), 0 0 50px rgba(59, 130, 246, 0.08); }
+.glow-holo:hover     { box-shadow: 0 4px 28px rgba(139, 92, 246, 0.28), 0 0 55px rgba(139,  92, 246, 0.10); }
+.glow-ultra:hover    { box-shadow: 0 4px 30px rgba(245,158,  11, 0.32), 0 0 60px rgba(245, 158,  11, 0.12); }
+.glow-secret:hover   { box-shadow: 0 4px 36px rgba(255,203,   5, 0.38), 0 0 70px rgba(239,  68,  68, 0.20); }
+
+/* Price direction colors */
+.price-up      { color: #4ade80; }
+.price-down    { color: #f87171; }
+.price-neutral { color: #94a3b8; }
+
+/* Animated rarity badges (Holo / Ultra / Secret) */
+@keyframes badge-shimmer {
+  0%, 100% { background-position: 0%   50%; }
+  50%      { background-position: 100% 50%; }
+}
+.badge-rare-holo {
+  background: linear-gradient(90deg, #3b0764, #6d28d9, #7c3aed, #6d28d9, #3b0764);
+  background-size: 300% 100%;
+  animation: badge-shimmer 3.5s ease infinite;
+  color: #ddd6fe;
+}
+.badge-rare-ultra {
+  background: linear-gradient(90deg, #78350f, #b45309, #fbbf24, #b45309, #78350f);
+  background-size: 300% 100%;
+  animation: badge-shimmer 3.5s ease infinite;
+  color: #fef3c7;
+}
+.badge-rare-secret {
+  background: linear-gradient(90deg, #7f1d1d, #cc0000, #ffcb05, #cc0000, #7f1d1d);
+  background-size: 300% 100%;
+  animation: badge-shimmer 2.8s ease infinite;
+  color: #fefce8;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer-slide {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #131f35 25%, #1a2d4a 50%, #131f35 75%);
+  background-size: 200% 100%;
+  animation: shimmer-slide 1.8s ease infinite;
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.25s ease-out forwards; }

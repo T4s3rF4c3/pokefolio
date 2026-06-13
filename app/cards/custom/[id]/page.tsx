@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { ArrowLeft, ExternalLink, Plus, Sparkles } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Pencil, Plus, Sparkles } from 'lucide-react';
 import { formatDate, formatEur } from '@/lib/utils';
 import AddToCollectionForm from '../../[cardId]/AddToCollectionForm';
 import CustomCardActions from './CustomCardActions';
 import CardCodeBadge from '@/components/CardCodeBadge';
 import CardmarketLinker from '@/components/CardmarketLinker';
+import CardSparkline from '@/components/CardSparkline';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ export default async function CustomCardPage({ params }: { params: { id: string 
   });
   if (!card) notFound();
 
-  const [items, cmProduct] = await Promise.all([
+  const [items, cmProduct, history] = await Promise.all([
     prisma.collectionItem.findMany({
       where: { customCardId: card.id },
       orderBy: { acquiredAt: 'desc' },
@@ -28,12 +29,27 @@ export default async function CustomCardPage({ params }: { params: { id: string 
           include: { price: true },
         })
       : null,
+    prisma.priceHistory.findMany({
+      where: { customCardId: card.id },
+      orderBy: { capturedAt: 'asc' },
+      take: 365,
+    }),
   ]);
   const inCollection = items.reduce((s, i) => s + (i.quantity ?? 1), 0);
 
   // Effective price source label for the badge.
   const cmTrend = cmProduct?.price?.trend ?? cmProduct?.price?.avg ?? cmProduct?.price?.low ?? null;
   const effectiveSource = cmTrend != null ? 'cardmarket-bulk' : card.manualPriceEur != null ? 'manual' : null;
+
+  // Price history (Kursverlauf), ending on the current effective price so the
+  // chart matches the displayed value — bulk price wins, else the manual price.
+  const sparkData = history
+    .map((h) => ({ capturedAt: h.capturedAt.toISOString(), price: h.trendEur ?? h.avgEur ?? 0 }))
+    .filter((d) => d.price > 0);
+  const currentPrice = cmTrend ?? card.manualPriceEur ?? null;
+  if (currentPrice != null && currentPrice > 0) {
+    sparkData.push({ capturedAt: new Date().toISOString(), price: currentPrice });
+  }
 
   const cardmarketHref =
     card.cardmarketUrl ||
@@ -80,7 +96,7 @@ export default async function CustomCardPage({ params }: { params: { id: string 
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 text-center text-[11px] text-ink-300">
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-300">
             <a
               href={cardmarketHref}
               target="_blank"
@@ -88,8 +104,15 @@ export default async function CustomCardPage({ params }: { params: { id: string 
               className="surface p-2.5 hover:text-white transition flex items-center justify-center gap-1.5"
             >
               <ExternalLink className="h-3 w-3" />
-              Cardmarket öffnen
+              Cardmarket
             </a>
+            <Link
+              href={`/cards/custom/${card.id}/edit`}
+              className="surface p-2.5 hover:text-white transition flex items-center justify-center gap-1.5"
+            >
+              <Pencil className="h-3 w-3" />
+              Bearbeiten
+            </Link>
             <CustomCardActions id={card.id} />
           </div>
         </div>
@@ -226,6 +249,18 @@ export default async function CustomCardPage({ params }: { params: { id: string 
               {card.notes}
             </div>
           )}
+
+          <div className="surface p-5">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-ink-300">
+              Kursverlauf
+            </div>
+            <div className="font-display text-xl font-bold mt-1 tabular-nums">
+              {formatEur(sparkData[sparkData.length - 1]?.price ?? null)}
+            </div>
+            <div className="mt-4">
+              <CardSparkline data={sparkData} height={140} />
+            </div>
+          </div>
 
           <div className="surface p-5">
             <h3 className="font-display text-sm font-semibold mb-3 flex items-center gap-2">

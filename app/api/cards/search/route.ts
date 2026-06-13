@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import {
-  searchCards,
-  cardImageUrl,
-  getCard,
-  extractCardmarketPrices,
-  extractTcgplayerPrices,
-} from '@/lib/tcgdex';
+import { searchCardsMultiLang, cardImageUrl, getCardAnyLang } from '@/lib/tcgdex';
+import { upsertTcgdexCard } from '@/lib/cards';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +50,7 @@ export async function GET(req: Request) {
   let remote: { id: string; name: string; localId: string; imageUrl: string | null }[] = [];
   if (cards.length < 10 && !codeMatch) {
     try {
-      const r = await searchCards(q);
+      const r = await searchCardsMultiLang(q);
       remote = r.slice(0, 30).map((c) => ({
         id: c.id,
         name: c.name,
@@ -113,55 +108,11 @@ async function tryCodeLookup(q: string) {
 
     for (const candId of tcgdexCandidates) {
       try {
-        const remote = await getCard(candId);
-        if (!remote?.id) continue;
-        const prices = extractCardmarketPrices(remote);
-        const tcgp = extractTcgplayerPrices(remote);
-        const tcgpData = {
-          priceTcgpVariant: tcgp.variant,
-          priceTcgpLowUsd: tcgp.lowUsd,
-          priceTcgpMidUsd: tcgp.midUsd,
-          priceTcgpHighUsd: tcgp.highUsd,
-          priceTcgpMarketUsd: tcgp.marketUsd,
-          priceTcgpUpdatedAt: tcgp.updatedAt,
-        };
-        const upserted = await prisma.card.upsert({
-          where: { id: remote.id },
-          create: {
-            id: remote.id,
-            setId: remote.set?.id ?? candId.split('-')[0],
-            localId: remote.localId,
-            name: remote.name,
-            rarity: remote.rarity ?? null,
-            category: remote.category ?? null,
-            hp: typeof remote.hp === 'number' ? remote.hp : null,
-            types: remote.types?.join(',') ?? null,
-            imageUrl: cardImageUrl(remote.image, 'high'),
-            imageUrlSmall: cardImageUrl(remote.image, 'low'),
-            priceTrendEur: prices.trendEur,
-            priceAvgEur: prices.avgEur,
-            priceLowEur: prices.lowEur,
-            priceTrendHoloEur: prices.trendHoloEur,
-            priceAvgHoloEur: prices.avgHoloEur,
-            priceUpdatedAt: prices.updatedAt,
-            ...tcgpData,
-            lang: 'de',
-          },
-          update: {
-            name: remote.name,
-            imageUrl: cardImageUrl(remote.image, 'high'),
-            imageUrlSmall: cardImageUrl(remote.image, 'low'),
-            priceTrendEur: prices.trendEur,
-            priceAvgEur: prices.avgEur,
-            priceLowEur: prices.lowEur,
-            priceTrendHoloEur: prices.trendHoloEur,
-            priceAvgHoloEur: prices.avgHoloEur,
-            priceUpdatedAt: prices.updatedAt,
-            ...tcgpData,
-          },
-          include: { set: true },
-        });
-        return upserted;
+        // getCardAnyLang covers Japanese-only cards (sv3-113 → /ja/) that 404
+        // under de/en; upsertTcgdexCard ensures the (maybe un-synced) set first.
+        const found = await getCardAnyLang(candId);
+        if (!found) continue;
+        return await upsertTcgdexCard(found.card, found.lang);
       } catch {
         /* try next candidate */
       }

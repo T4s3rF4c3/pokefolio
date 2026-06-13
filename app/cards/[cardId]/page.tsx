@@ -5,12 +5,8 @@ import { ArrowLeft, ExternalLink, Heart, Plus, Sparkles, TrendingDown, TrendingU
 import { cn, formatDate, formatEur, formatUsd } from '@/lib/utils';
 import CardCodeBadge from '@/components/CardCodeBadge';
 import AddToCollectionForm from './AddToCollectionForm';
-import {
-  getCard,
-  extractCardmarketPrices,
-  extractTcgplayerPrices,
-  cardImageUrl,
-} from '@/lib/tcgdex';
+import { getCardAnyLang } from '@/lib/tcgdex';
+import { upsertTcgdexCard } from '@/lib/cards';
 import CardSparkline from '@/components/CardSparkline';
 import CardmarketLinker from '@/components/CardmarketLinker';
 
@@ -27,59 +23,12 @@ async function ensureCard(cardId: string) {
 
   if (!card || stale) {
     try {
-      const remote = await getCard(cardId);
-      const prices = extractCardmarketPrices(remote);
-      const tcgp = extractTcgplayerPrices(remote);
-      const tcgpData = {
-        priceTcgpVariant: tcgp.variant,
-        priceTcgpLowUsd: tcgp.lowUsd,
-        priceTcgpMidUsd: tcgp.midUsd,
-        priceTcgpHighUsd: tcgp.highUsd,
-        priceTcgpMarketUsd: tcgp.marketUsd,
-        priceTcgpUpdatedAt: tcgp.updatedAt,
-      };
-      card = await prisma.card.upsert({
-        where: { id: remote.id },
-        create: {
-          id: remote.id,
-          setId: remote.set?.id ?? card?.setId ?? cardId.split('-')[0],
-          localId: remote.localId,
-          name: remote.name,
-          rarity: remote.rarity ?? null,
-          category: remote.category ?? null,
-          hp: typeof remote.hp === 'number' ? remote.hp : null,
-          types: remote.types?.join(',') ?? null,
-          illustrator: remote.illustrator ?? null,
-          imageUrl: cardImageUrl(remote.image, 'high'),
-          imageUrlSmall: cardImageUrl(remote.image, 'low'),
-          priceTrendEur: prices.trendEur ?? null,
-          priceAvgEur: prices.avgEur ?? null,
-          priceLowEur: prices.lowEur ?? null,
-          priceTrendHoloEur: prices.trendHoloEur ?? null,
-          priceAvgHoloEur: prices.avgHoloEur ?? null,
-          priceUpdatedAt: prices.updatedAt ?? new Date(),
-          ...tcgpData,
-          lang: 'de',
-        },
-        update: {
-          name: remote.name,
-          rarity: remote.rarity ?? null,
-          category: remote.category ?? null,
-          hp: typeof remote.hp === 'number' ? remote.hp : null,
-          types: remote.types?.join(',') ?? null,
-          illustrator: remote.illustrator ?? null,
-          imageUrl: cardImageUrl(remote.image, 'high'),
-          imageUrlSmall: cardImageUrl(remote.image, 'low'),
-          priceTrendEur: prices.trendEur ?? null,
-          priceAvgEur: prices.avgEur ?? null,
-          priceLowEur: prices.lowEur ?? null,
-          priceTrendHoloEur: prices.trendHoloEur ?? null,
-          priceAvgHoloEur: prices.avgHoloEur ?? null,
-          priceUpdatedAt: prices.updatedAt ?? new Date(),
-          ...tcgpData,
-        },
-        include: { set: true },
-      });
+      // getCardAnyLang resolves Japanese-only cards (e.g. sv3-113 under /ja/)
+      // that 404 under de/en; upsertTcgdexCard ensures the parent set exists.
+      const found = await getCardAnyLang(cardId);
+      if (found) {
+        card = await upsertTcgdexCard(found.card, found.lang);
+      }
     } catch {
       if (!card) return null;
     }
@@ -131,6 +80,13 @@ export default async function CardPage({ params }: { params: { cardId: string } 
     }))
     .filter((d) => d.price > 0);
 
+  // Always end the chart on the current effective price (Cardmarket bulk wins),
+  // so the Kursverlauf reflects the displayed value even between price syncs.
+  const currentPrice = cm.trend ?? cm.avg ?? cm.low ?? null;
+  if (currentPrice != null && currentPrice > 0) {
+    sparkData.push({ capturedAt: new Date().toISOString(), price: currentPrice });
+  }
+
   const firstPrice = sparkData[0]?.price ?? card.priceTrendEur ?? card.priceAvgEur ?? 0;
   const lastPrice = sparkData[sparkData.length - 1]?.price ?? card.priceTrendEur ?? card.priceAvgEur ?? 0;
   const sparkChange = lastPrice - firstPrice;
@@ -163,9 +119,13 @@ export default async function CardPage({ params }: { params: { cardId: string } 
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-300">
             <a
-              href={`https://www.cardmarket.com/de/Pokemon/Products/Search?searchString=${encodeURIComponent(
-                card.name + ' ' + card.localId,
-              )}`}
+              href={
+                card.cardmarketIdProduct
+                  ? `https://www.cardmarket.com/de/Pokemon/Products?idProduct=${card.cardmarketIdProduct}`
+                  : `https://www.cardmarket.com/de/Pokemon/Products/Search?searchString=${encodeURIComponent(
+                      card.name + ' ' + card.localId,
+                    )}`
+              }
               target="_blank"
               rel="noreferrer"
               className="surface p-2.5 hover:text-white transition flex items-center justify-center gap-1.5"
@@ -213,6 +173,18 @@ export default async function CardPage({ params }: { params: { cardId: string } 
               )}
             </div>
           </div>
+
+          {card.lang === 'ja' && (
+            <div className="surface-glass p-3 text-xs text-ink-200 flex items-start gap-2.5 border border-electric-500/20">
+              <Sparkles className="h-3.5 w-3.5 text-electric-400 shrink-0 mt-0.5" />
+              <span>
+                Japanische Karte: Set-/Card-ID weicht vom westlichen Druck ab (z.B.{' '}
+                <code className="text-electric-300">sv3</code> statt{' '}
+                <code className="text-electric-300">sv03</code>). Beim Suchen oder beim
+                Cardmarket-Verknüpfen die ID bzw. den Set-Code ggf. entsprechend anpassen.
+              </span>
+            </div>
+          )}
 
           {types.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">

@@ -181,6 +181,195 @@ export async function syncCardmarketCatalog(): Promise<SyncResult> {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Automatic price import from a pasted Cardmarket reference.
+//
+// Cardmarket's product page is Cloudflare-gated, but two other surfaces are
+// not: the S3 product-image CDN (whose URL embeds the idProduct) and the bulk
+// price guide we already sync into CardmarketPrice. So instead of scraping the
+// page, we pull the idProduct out of whatever the user pastes and look the
+// price up locally. Mirrors the approach from the previous app version.
+// ---------------------------------------------------------------------------
+
+export type ParsedCardmarketInput =
+  | { source: 'image-url'; idProduct: number; setCode: string | null }
+  | { source: 'id'; idProduct: number; setCode: null }
+  | {
+      source: 'page-url';
+      idProduct: number | null;
+      setCode: string | null;
+      cardNumber: string | null;
+      cardName: string | null;
+      setName: string | null;
+    }
+  | null;
+
+/**
+ * Pull an idProduct (and, when available, set code / name) out of any
+ * Cardmarket-related input:
+ *   1. Product image URL:  https://product-images.s3.cardmarket.com/51/MEW/769543/769543.jpg
+ *   2. Plain idProduct:    769543
+ *   3. Product page URL:   …/Singles/Pokemon-Card-151/Mewtwo-V2-sv2a183  (idProduct only
+ *      if the URL carries a ?idProduct= query; otherwise name/set are parsed)
+ */
+export function parseCardmarketInput(input: string): ParsedCardmarketInput {
+  const s = (input ?? '').trim();
+  if (!s) return null;
+
+  // 1. S3 image CDN URL — most reliable, contains idProduct directly.
+  const imgMatch = s.match(/product-images\.s3\.cardmarket\.com\/51\/([^/]+)\/(\d+)\//i);
+  if (imgMatch) {
+    return { source: 'image-url', setCode: imgMatch[1].toUpperCase(), idProduct: parseInt(imgMatch[2], 10) };
+  }
+
+  // 2. Plain idProduct number.
+  if (/^\d{4,8}$/.test(s)) {
+    return { source: 'id', setCode: null, idProduct: parseInt(s, 10) };
+  }
+
+  // 3. Cardmarket product page URL.
+  if (/cardmarket\./i.test(s)) {
+    try {
+      const u = new URL(s);
+      const qId = u.searchParams.get('idProduct');
+      if (qId && /^\d+$/.test(qId)) {
+        return { source: 'id', setCode: null, idProduct: parseInt(qId, 10) };
+      }
+      const parts = u.pathname.split('/').filter(Boolean);
+      const singlesIdx = parts.findIndex((p) => p === 'Singles');
+      if (singlesIdx !== -1 && singlesIdx + 2 < parts.length) {
+        const setSlug = parts[singlesIdx + 1];
+        const cardSlug = parts[singlesIdx + 2];
+        const m = cardSlug.match(/[^-]*-([A-Za-z][A-Za-z0-9]*?[A-Za-z])(\d{1,4})$/);
+        return {
+          source: 'page-url',
+          idProduct: null,
+          setCode: m ? m[1].toUpperCase() : null,
+          cardNumber: m ? m[2] : null,
+          cardName: m
+            ? cardSlug.slice(0, cardSlug.lastIndexOf('-' + m[1] + m[2])).replace(/-/g, ' ')
+            : decodeURIComponent(cardSlug).replace(/-/g, ' '),
+          setName: decodeURIComponent(setSlug).replace(/-/g, ' '),
+        };
+      }
+    } catch {
+      /* not a parseable URL */
+    }
+  }
+
+  return null;
+}
+
+/** Deterministic S3 product-image URL (no fetch, no auth). */
+export function cardmarketImageUrl(setCode: string, idProduct: number): string {
+  return `https://product-images.s3.cardmarket.com/51/${setCode.toUpperCase()}/${idProduct}/${idProduct}.jpg`;
+}
+
+export type ResolveCardmarketResult =
+  | {
+      found: true;
+      idProduct: number;
+      name: string;
+      setCode: string | null;
+      imageUrl: string | null;
+      productUrl: string;
+      priceEur: number | null;
+      price: CardmarketPriceRow;
+    }
+  | {
+      found: false;
+      idProduct: number | null;
+      // Best-effort fields parsed from a page URL so the form can still prefill.
+      setCode: string | null;
+      cardName: string | null;
+      cardNumber: string | null;
+      setName: string | null;
+      reason: string;
+    };
+
+/**
+ * Resolve a pasted Cardmarket reference to a synced product + bulk price.
+ * Reads only the local Cardmarket tables — run the bulk sync first.
+ */
+export async function resolveCardmarketProduct(input: string): Promise<ResolveCardmarketResult> {
+  const parsed = parseCardmarketInput(input);
+  if (!parsed) {
+    return {
+      found: false,
+      idProduct: null,
+      setCode: null,
+      cardName: null,
+      cardNumber: null,
+      setName: null,
+      reason:
+        'Eingabe nicht erkannt. Bitte eine Cardmarket-Bild-URL, eine idProduct-Nummer oder eine Produktseiten-URL einfügen.',
+    };
+  }
+
+  // Page URL without an idProduct: hand back the parsed name/set for prefill.
+  if (parsed.source === 'page-url' && parsed.idProduct == null) {
+    return {
+      found: false,
+      idProduct: null,
+      setCode: parsed.setCode,
+      cardName: parsed.cardName,
+      cardNumber: parsed.cardNumber,
+      setName: parsed.setName,
+      reason:
+        'Name und Set aus der URL übernommen, aber ohne idProduct kein automatischer Preis. Tipp: Rechtsklick auf das Kartenbild auf Cardmarket → Bildadresse kopieren und hier einfügen.',
+    };
+  }
+
+  const idProduct = parsed.idProduct as number;
+  const setCode = 'setCode' in parsed ? parsed.setCode : null;
+
+  const product = await prisma.cardmarketProduct.findUnique({
+    where: { idProduct },
+    include: { price: true },
+  });
+
+  if (!product) {
+    return {
+      found: false,
+      idProduct,
+      setCode,
+      cardName: null,
+      cardNumber: null,
+      setName: null,
+      reason:
+        'idProduct erkannt, aber nicht in den lokalen Bulk-Daten. Bitte zuerst unter „Einstellungen → Cardmarket Bulk-Daten holen" synchronisieren.',
+    };
+  }
+
+  const p = product.price;
+  const price: CardmarketPriceRow = {
+    avg: p?.avg ?? null,
+    low: p?.low ?? null,
+    trend: p?.trend ?? null,
+    avg1: p?.avg1 ?? null,
+    avg7: p?.avg7 ?? null,
+    avg30: p?.avg30 ?? null,
+    avgHolo: p?.avgHolo ?? null,
+    lowHolo: p?.lowHolo ?? null,
+    trendHolo: p?.trendHolo ?? null,
+  };
+  const priceEur = price.trend ?? price.avg ?? price.low ?? null;
+
+  return {
+    found: true,
+    idProduct,
+    name: product.name,
+    setCode,
+    imageUrl: setCode ? cardmarketImageUrl(setCode, idProduct) : null,
+    // Canonical product-page link (redirects to the right page). Stored as the
+    // card's cardmarketUrl so the detail-view link works even when the user
+    // pasted an image URL or a bare idProduct.
+    productUrl: `https://www.cardmarket.com/de/Pokemon/Products?idProduct=${idProduct}`,
+    priceEur,
+    price,
+  };
+}
+
 /**
  * Fuzzy product lookup by name. Used by the picker UI.
  */

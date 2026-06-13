@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
 import CardTile from '@/components/CardTile';
 import EmptyState from '@/components/EmptyState';
+import DeleteCollectionItemButton from './DeleteCollectionItemButton';
 import { Library, Plus, Search } from 'lucide-react';
 import { formatEur, formatNumber } from '@/lib/utils';
 import {
@@ -82,18 +83,20 @@ export default async function CollectionPage() {
                 ? effectiveCustomCardPrice(it.customCard, lookup)
                 : null;
             return (
-              <CardTile
-                key={it.id}
-                href={isCustom ? `/cards/custom/${it.customCardId}` : `/cards/${it.cardId}`}
-                name={card.name}
-                setLabel={setLabel}
-                localId={card.localId}
-                rarity={'rarity' in card ? card.rarity : null}
-                imageUrl={card.imageUrl}
-                trendEur={trend}
-                quantity={it.quantity}
-                isCustom={isCustom}
-              />
+              <div key={it.id} className="relative group">
+                <CardTile
+                  href={isCustom ? `/cards/custom/${it.customCardId}` : `/cards/${it.cardId}`}
+                  name={card.name}
+                  setLabel={setLabel}
+                  localId={card.localId}
+                  rarity={'rarity' in card ? card.rarity : null}
+                  imageUrl={card.imageUrl}
+                  trendEur={trend}
+                  quantity={it.quantity}
+                  isCustom={isCustom}
+                />
+                <DeleteCollectionItemButton id={it.id} name={card.name} />
+              </div>
             );
           })}
         </div>

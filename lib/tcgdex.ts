@@ -9,6 +9,22 @@
 const BASE = process.env.TCGDEX_BASE_URL ?? 'https://api.tcgdex.net/v2';
 const DEFAULT_LANG = process.env.TCGDEX_LANG ?? 'de';
 
+/**
+ * Languages searched by name. TCGdex localizes card names per language, so a
+ * German-only query never finds a card the user typed in English (e.g.
+ * "Charizard" → German "Glurak"). We query the primary language plus English
+ * and merge. Primary language wins on name; missing images are backfilled from
+ * the other language. Override via TCGDEX_SEARCH_LANGS="de,en,fr".
+ */
+const SEARCH_LANGS = Array.from(
+  new Set(
+    (process.env.TCGDEX_SEARCH_LANGS ?? `${DEFAULT_LANG},en,ja`)
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  ),
+);
+
 export type TcgdexSetSummary = {
   id: string;
   name: string;
@@ -118,10 +134,55 @@ export function getCard(cardId: string, l?: string) {
   return tcgFetch<TcgdexCardFull>(`/${lang(l)}/cards/${encodeURIComponent(cardId)}`);
 }
 
-// Fuzzy search by name across the current language.
+/**
+ * Fetch a card trying each SEARCH_LANGS language in order, returning the first
+ * hit plus the language it was found under. Japanese-only cards (e.g.
+ * "sv3-113", which 404s under de/en) resolve here under "ja".
+ */
+export async function getCardAnyLang(
+  cardId: string,
+): Promise<{ card: TcgdexCardFull; lang: string } | null> {
+  for (const l of SEARCH_LANGS) {
+    try {
+      const card = await getCard(cardId, l);
+      if (card?.id) return { card, lang: l };
+    } catch {
+      /* try next language */
+    }
+  }
+  return null;
+}
+
+// Fuzzy search by name in a single language.
 export function searchCards(query: string, l?: string) {
   const url = `/${lang(l)}/cards?name=like:${encodeURIComponent(query)}`;
   return tcgFetch<TcgdexCardSummary[]>(url);
+}
+
+/**
+ * Fuzzy search by name across all SEARCH_LANGS in parallel, merged.
+ *
+ * Dedupes by card id, keeping the first language's localized name (primary
+ * language wins because SEARCH_LANGS lists it first). If the kept entry has no
+ * image but a duplicate from another language does, the image is backfilled —
+ * TCGdex often omits images on localized search summaries.
+ */
+export async function searchCardsMultiLang(query: string): Promise<TcgdexCardSummary[]> {
+  const results = await Promise.allSettled(SEARCH_LANGS.map((l) => searchCards(query, l)));
+  const byId = new Map<string, TcgdexCardSummary>();
+  for (const r of results) {
+    if (r.status !== 'fulfilled' || !Array.isArray(r.value)) continue;
+    for (const c of r.value) {
+      if (!c?.id) continue;
+      const existing = byId.get(c.id);
+      if (!existing) {
+        byId.set(c.id, c);
+      } else if (!existing.image && c.image) {
+        byId.set(c.id, { ...existing, image: c.image });
+      }
+    }
+  }
+  return Array.from(byId.values());
 }
 
 /**

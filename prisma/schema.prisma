@@ -117,6 +117,7 @@ model CustomCard {
   collectionItems CollectionItem[]
   binderSlots     BinderSlot[]
   wishlistItems   WishlistItem[]
+  priceHistory    PriceHistory[]
 
   createdAt      DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -190,16 +191,19 @@ model WishlistItem {
 }
 
 model PriceHistory {
-  id         String   @id @default(cuid())
-  cardId     String
-  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  source     String   @default("tcgdex-cardmarket")
-  trendEur   Float?
-  avgEur     Float?
-  lowEur     Float?
-  capturedAt DateTime @default(now())
+  id           String      @id @default(cuid())
+  cardId       String?
+  card         Card?       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  customCardId String?
+  customCard   CustomCard? @relation(fields: [customCardId], references: [id], onDelete: Cascade)
+  source       String      @default("tcgdex-cardmarket")
+  trendEur     Float?
+  avgEur       Float?
+  lowEur       Float?
+  capturedAt   DateTime    @default(now())
 
   @@index([cardId, capturedAt])
+  @@index([customCardId, capturedAt])
 }
 
 // Cardmarket bulk catalog. Refreshed daily from

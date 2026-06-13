@@ -33,6 +33,7 @@ const createSchema = z.object({
     .or(z.literal('')),
   notes: z.string().max(800).optional().nullable(),
   manualPriceEur: z.coerce.number().nonnegative().optional().nullable(),
+  cardmarketIdProduct: z.coerce.number().int().positive().optional().nullable(),
 });
 
 export async function GET() {
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
       notes: data.notes || null,
       manualPriceEur: data.manualPriceEur ?? null,
       priceUpdatedAt: data.manualPriceEur != null ? new Date() : null,
+      cardmarketIdProduct: data.cardmarketIdProduct ?? null,
     },
   });
   return NextResponse.json(card, { status: 201 });
