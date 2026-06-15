@@ -43,7 +43,9 @@ ENV NODE_ENV=production \
     DATABASE_URL=file:/app/data/pokefolio.db \
     PUID=1000 \
     PGID=1000 \
-    TZ=Europe/Berlin
+    TZ=Europe/Berlin \
+    PRICE_SYNC_ENABLED=true \
+    PRICE_SYNC_INTERVAL_HOURS=6
 
 # Standalone server + static + public.
 COPY --from=builder /app/.next/standalone ./

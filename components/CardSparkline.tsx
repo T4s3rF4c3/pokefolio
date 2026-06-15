@@ -1,6 +1,6 @@
 'use client';
 
-import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { formatEur } from '@/lib/utils';
 
 type Props = {
@@ -27,6 +27,10 @@ export default function CardSparkline({ data, trendDown, height = 90 }: Props) {
             <stop offset="100%" stopColor={stroke} stopOpacity={0} />
           </linearGradient>
         </defs>
+        {/* Hidden, but gives the Tooltip a real category key — without it
+            recharts labels each point by its array index, so new Date(index)
+            renders every tooltip as "01. Jan" (epoch 1970). */}
+        <XAxis dataKey="capturedAt" hide />
         <Tooltip
           contentStyle={{
             background: 'rgba(15, 17, 28, 0.95)',
