@@ -130,7 +130,7 @@ export default function Sidebar() {
   return (
     <>
       {/* Desktop sidebar — visible from lg up */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-white/5 bg-ink-900/40 backdrop-blur-md sticky top-0 h-screen">
+      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-white/5 bg-ink-900/40 backdrop-blur-md sticky top-0 h-screen pt-[env(safe-area-inset-top)]">
         <div className="px-6 py-6 border-b border-white/5">
           <Brand />
         </div>
@@ -146,7 +146,7 @@ export default function Sidebar() {
             onClick={() => setOpen(false)}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
-          <aside className="relative flex flex-col w-72 max-w-[85vw] h-full bg-ink-900/95 backdrop-blur-xl border-r border-white/5 shadow-2xl animate-[slideIn_0.2s_ease-out]">
+          <aside className="relative flex flex-col w-72 max-w-[85vw] h-full bg-ink-900/95 backdrop-blur-xl border-r border-white/5 shadow-2xl animate-[slideIn_0.2s_ease-out] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
             <div className="flex items-center justify-between px-5 py-5 border-b border-white/5">
               <Brand onClick={() => setOpen(false)} />
               <button

@@ -37,7 +37,7 @@ export default function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/5 bg-ink-950/70 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-ink-950/70 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
       <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-10 py-3 sm:py-4 max-w-[1500px] mx-auto">
         <button
           onClick={toggle}
