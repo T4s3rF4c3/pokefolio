@@ -1,7 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
 import { formatDate } from '@/lib/utils';
+import { DAILY_SYNC_MIN_HOURS } from '@/lib/sync';
+import { getSchedulerStatus } from '@/lib/scheduler';
 import CardmarketSyncButton from './CardmarketSyncButton';
+import SyncCenter, { type SyncStatus } from './SyncCenter';
 import BackupCard from './BackupCard';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +29,32 @@ export default async function SettingsPage() {
     }))(),
   ]);
 
+  // Build the same shape /api/sync/status returns so SyncCenter renders
+  // immediately (no loading flash) and then keeps itself fresh via polling.
+  const lastPriceSync = settings?.lastPriceSync ?? null;
+  // "Next due" tracks the daily catalog job (throttled off syncedAt), matching
+  // runDailySyncIfDue — not the price-only lastPriceSync.
+  const lastDailyRun = cmSync?.syncedAt ?? null;
+  const nextDueAt = lastDailyRun
+    ? new Date(new Date(lastDailyRun).getTime() + DAILY_SYNC_MIN_HOURS * 60 * 60 * 1000)
+    : null;
+  const syncStatus: SyncStatus = {
+    scheduler: getSchedulerStatus(),
+    minHours: DAILY_SYNC_MIN_HOURS,
+    lastPriceSync: lastPriceSync ? new Date(lastPriceSync).toISOString() : null,
+    nextDueAt: nextDueAt ? nextDueAt.toISOString() : null,
+    due: !nextDueAt || nextDueAt.getTime() <= Date.now(),
+    cardmarket: cmSync
+      ? {
+          syncedAt: cmSync.syncedAt ? new Date(cmSync.syncedAt).toISOString() : null,
+          catalogAt: cmSync.catalogAt ? new Date(cmSync.catalogAt).toISOString() : null,
+          pricesAt: cmSync.pricesAt ? new Date(cmSync.pricesAt).toISOString() : null,
+          productsCount: cmSync.productsCount,
+          pricesCount: cmSync.pricesCount,
+        }
+      : null,
+  };
+
   return (
     <div className="space-y-6 max-w-3xl">
       <PageHeader
@@ -33,6 +62,8 @@ export default async function SettingsPage() {
         title="Konfiguration"
         description="Diese MVP-Version läuft komplett lokal: SQLite-Datei, Prisma-Schema, TCGdex für Karten-Metadaten, Cardmarket Bulk-Drops für Preise."
       />
+
+      <SyncCenter initial={syncStatus} />
 
       <section className="surface p-5 space-y-4">
         <div>

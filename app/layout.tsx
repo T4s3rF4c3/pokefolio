@@ -1,5 +1,5 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import Sidebar from '@/components/Sidebar';
 import QueryProvider from '@/components/QueryProvider';
@@ -26,8 +26,18 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   themeColor: '#06070d',
+  width: 'device-width',
+  initialScale: 1,
+  // Prevent the accidental "pinch"/double-tap zoom and — crucially — the iOS
+  // Safari auto-zoom that fires when you focus a text field (e.g. the search
+  // box). Combined with 16px form-control font-size in globals.css this keeps
+  // the home-screen WebClip behaving like a native app.
+  maximumScale: 1,
+  userScalable: false,
+  // Let the layout extend under the notch / home indicator on the WebClip.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

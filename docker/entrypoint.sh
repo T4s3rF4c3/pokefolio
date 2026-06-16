@@ -20,8 +20,12 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
   usermod  -o -u "$PUID" -g "$PGID" nodeapp >/dev/null 2>&1 || true
 fi
 
-mkdir -p /app/data /app/public/uploads
-chown -R "${PUID}:${PGID}" /app/data /app/public/uploads /app/node_modules/.prisma /app/prisma 2>/dev/null || true
+# /app/.next/cache: Next's standalone server writes its incremental/prerender
+# cache here at runtime. The .next tree is COPYed in as root, so without this the
+# remapped runtime user hits "EACCES: mkdir '/app/.next/cache'" the first time a
+# cached route (e.g. a card detail page) is rendered.
+mkdir -p /app/data /app/public/uploads /app/.next/cache
+chown -R "${PUID}:${PGID}" /app/data /app/public/uploads /app/.next/cache /app/node_modules/.prisma /app/prisma 2>/dev/null || true
 
 # Apply schema. Safe on a fresh DB (creates everything) and safe across
 # restarts (no-op when already current). Additive schema changes apply

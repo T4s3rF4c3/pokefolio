@@ -158,6 +158,13 @@ export async function runPriceSync(): Promise<PriceSyncResult> {
 
 let running = false;
 
+/**
+ * How stale the last price sync must be before the daily refresh runs again.
+ * Shared with the status endpoint so the "next due" time it reports matches what
+ * the scheduler actually enforces.
+ */
+export const DAILY_SYNC_MIN_HOURS = 20;
+
 export type DailySyncOutcome =
   | { ran: false; reason: 'disabled' | 'already-running' | 'not-due' }
   | { ran: true; catalog: 'ok' | 'failed'; prices: PriceSyncResult };
@@ -174,9 +181,14 @@ export async function runDailySyncIfDue(opts?: {
   if (process.env.PRICE_SYNC_ENABLED === 'false') return { ran: false, reason: 'disabled' };
   if (running) return { ran: false, reason: 'already-running' };
 
-  const minHours = opts?.minHours ?? 20;
-  const setting = await prisma.appSetting.findUnique({ where: { id: 1 } });
-  const last = setting?.lastPriceSync ? new Date(setting.lastPriceSync).getTime() : 0;
+  const minHours = opts?.minHours ?? DAILY_SYNC_MIN_HOURS;
+  // Throttle off the Cardmarket catalog's own last-run timestamp, NOT
+  // AppSetting.lastPriceSync. The manual "refresh prices" button bumps
+  // lastPriceSync; gating on it meant that any manual price refresh kept pushing
+  // the heavy daily catalog drop out of its window, so it effectively never ran
+  // on its own. syncedAt only advances on a real daily run.
+  const cmSync = await prisma.cardmarketSync.findUnique({ where: { id: 1 } });
+  const last = cmSync?.syncedAt ? new Date(cmSync.syncedAt).getTime() : 0;
   const due = opts?.force || Date.now() - last > minHours * 60 * 60 * 1000;
   if (!due) return { ran: false, reason: 'not-due' };
 
